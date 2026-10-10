@@ -1,4 +1,5 @@
 #include "MobileAudioPickerPopup.hpp"
+#include "PopupScale.hpp"
 #include "../Common.hpp"
 #include <algorithm>
 
@@ -194,7 +195,7 @@ void MobileAudioPickerPopup::showInstant() {
     this->show();
     if (this->m_mainLayer) {
         this->m_mainLayer->stopAllActions();
-        this->m_mainLayer->setScale(1.0f);
+        applyWindowScale(this); // 原为 setScale(1.0f)；现按「窗口大小」设置缩放
     }
     if (this->m_bgSprite) {
         this->m_bgSprite->stopAllActions();

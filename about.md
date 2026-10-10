@@ -8,6 +8,9 @@ A utility mod for Geometry Dash designed to track frame windows, spawn custom vi
 
 * **Custom Markers & HUD:** Display custom text, colors, and audio effects on specific frames, with a live HUD counter for configured frame window ranges.
 * **Macro Integration:** Import `.fwc`, `.gdr`, `.gdr2`, `.json` (NaNDL), or `.slc` (Silicate) macro files. Export setups as `.fwc` or NaNDL `.json`.
+* **Keybinds (Desktop):** Add a 1-frame window on the current tick with one key press, optionally open the editor at the same time, and undo. All keys are rebindable in the mod settings.
+* **Display Settings:** Sliders for precision-label, counter-label and marker size, HUD opacity, and the size of every window.
+* **Base L\* %:** See how much of the final Base L\* is reached at each input.
 
 ---
 
@@ -15,7 +18,7 @@ A utility mod for Geometry Dash designed to track frame windows, spawn custom vi
 
 ### 1. Accessing the Menu
 * Click the time icon button on the right side of the Pause Menu.
-* **Windows Hotkey:** Press **`O`** on your keyboard to quickly toggle the editor anywhere.
+* **Desktop Hotkeys (rebindable in settings):** **`O`** toggles the editor anywhere, **`I`** adds a 1-frame window on the current tick, **`U`** adds one and opens the editor, **`Y`** undoes the last keybind frame.
 
 ### 2. Label & Window Settings
 1. Open **Labels** or **Windows** settings from the bottom menu of the editor.
@@ -28,7 +31,10 @@ A utility mod for Geometry Dash designed to track frame windows, spawn custom vi
 3. Toggle individual frames or use **Activate All** / **Inactivate All** for bulk edits.
 4. Click **Export** to save your setups.
 
-### 4. Precision Display (L*)
+### 4. Display Settings
+Click **Display** in the editor's bottom bar to resize the precision labels, counter labels, markers and all windows, and to change HUD opacity or hide markers.
+
+### 5. Precision Display (L*)
 1. Click the **Options** icon in the top-right of the Frame Editor to open Precision Display settings.
 2. Toggle any of the available formula modifiers:
    * **Base**
@@ -36,6 +42,7 @@ A utility mod for Geometry Dash designed to track frame windows, spawn custom vi
    * **Fatigue**
    * **CPS**
    * **Combinations:** N+F, N+C, F+C, and All (N+F+C).
+   * **Base L\* %:** the share of the final Base L\* reached at the current input.
 3. Calculations run asynchronously in the background. While processing, a progress percentage will be shown.
 4. Once completed, click the top status button in the editor to cycle through final $L^*$ metrics, or view live values in the bottom-left corner during gameplay.
 

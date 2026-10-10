@@ -10,6 +10,18 @@ A comprehensive frame window tracking, HUD customization, and $L^*$ (NaNDL Preci
 * **Custom Audio Effects:** Bind dedicated sound effects (`.ogg`, `.mp3`) to specific frame window presets.
 * **Camera Compatibility:** Full world-to-screen matrix transformations ensuring markers properly track through rotations, zoom, and reversed gravity.
 
+### Keybinds & Quick Capture (Desktop)
+* **Add 1-Frame Window:** One key press adds a 1-frame window for player 1 on the *current tick* of the level you are playing (duplicate ticks are skipped).
+* **Add + Open Editor:** Same as above, then opens the Frame Window Editor scrolled to the new frame.
+* **Undo Last Keybind Frame**, optional **frame offset**, optional **on-screen notifications** and optional **auto-recalculate L*** after each add.
+* Every key (including the original `O`) is a normal Geode keybind setting, so you can rebind them in the mod's settings.
+
+### Display Settings (new "Display" button in the editor)
+* **Precision Size / Counter Size / Marker Size:** sliders (50% - 250%) for the bottom-left L* labels, the top-left counter HUD and the in-game circle markers.
+* **HUD Opacity** slider and a **Show Markers** toggle (keep the counters, hide the circles).
+* **Window Size** slider (60% - 140%) that scales *all* of the mod's popups. Enlarging is capped so a window can never be pushed off-screen, and at 100% nothing changes.
+* Previews live: HUD changes are visible behind the popup while you drag; other open mod windows resize as you drag.
+
 ### Advanced Precision Calculator ($L^*$)
 * **Multi-Dimensional Metrics:** Solves for theoretical level precision across 8 dimension combinations:
   * **Base** ($L^*$)
@@ -24,6 +36,7 @@ A comprehensive frame window tracking, HUD customization, and $L^*$ (NaNDL Preci
   * **Target Solve Time (s):** Expected completion time benchmark (default: 86,400s / 24 hours).
   * **Model Constants:** Fine-tune $K_T$, $K_U$, and $K_C$ up to 16 decimal places with one-click default restore.
 * **Dirty State Indication:** Automatically highlights $L^*$ values in red when frames or settings are modified without recalculating.
+* **Base $L^*$ Precision Percentage:** an optional `Base L* %` display showing how much of the *final* base $L^*$ has been reached at the current input, i.e. `L*(this input) / L*(final) x 100`. It is weighted by each input's $L^*$ contribution, not by time or input count: a level with 500 $L^*$ whose first 5% of inputs already carry 450 $L^*$ reads 90% there. Shown in the bottom-left HUD and under every row of the frame list.
 
 ### Action Editor & Macro Tooling
 * **Timeline Tracking:** Automatically highlights and scrolls to the active frame in real-time as the level plays.
@@ -49,7 +62,8 @@ src/
 │   ├── State.hpp
 │   └── Types.hpp
 ├── Hook/                           # Geode game hooks & lifecycle modifications
-│   ├── CCDirectorHook.cpp          # Scene loop, autosave & hotkey handler
+│   ├── CCDirectorHook.cpp          # Scene loop, autosave & editor live-tracking
+│   ├── KeybindHooks.cpp            # Rebindable keybinds: open editor, add frame, add + open, undo
 │   ├── EndLevelLayerHook.cpp       # Level completion & end screen handling
 │   ├── PauseLayerHook.cpp          # Pause menu UI integration
 │   └── PlayLayerHook.cpp           # HUD rendering, marker spawning & game ticks
@@ -59,15 +73,18 @@ src/
 │   └── FileIO.hpp
 ├── Math/                           # L* mathematical models & multi-threaded solver
 │   ├── Calculator.cpp
-│   └── Calculator.hpp
+│   ├── Calculator.hpp
+│   └── DisplayMath.hpp             # Pure helpers (Base L* %, slider mapping, popup fit) - unit tested, no Geode deps
 ├── UI/                             # Custom Geode popups and editors
 │   ├── AddFramePopup.cpp / .hpp
+│   ├── DisplaySettingsPopup.cpp / .hpp
 │   ├── FrameActionPopup.cpp / .hpp
 │   ├── LabelPresetPopup.cpp / .hpp
 │   ├── LStarCalcSettingsPopup.cpp / .hpp
 │   ├── MobileAudioPickerPopup.cpp / .hpp
 │   ├── MobileExportPopup.cpp / .hpp
 │   ├── MobileImportPopup.cpp / .hpp
+│   ├── PopupScale.cpp / .hpp       # Applies the "Window Size" setting to every popup
 │   ├── PrecisionSettingsPopup.cpp / .hpp
 │   └── WindowPresetPopup.cpp / .hpp
 └── Common.hpp                      # Global constant definitions & math helpers
@@ -77,10 +94,17 @@ src/
 
 ## Hotkeys & Controls
 
-| Input | Location | Action |
+All keybinds are desktop-only and can be changed in the mod's settings (Geode keybind settings).
+
+| Default | Setting | Action |
 | :--- | :--- | :--- |
-| **`O`** | Anywhere in-game (Windows) | Toggle Frame Action Editor & close active submenus |
+| **`O`** | Open / Close Editor | Toggle Frame Action Editor & close active submenus (anywhere in the game) |
+| **`I`** | Add 1-Frame Window | Add a 1-frame, 1P window on the current tick of the level |
+| **`U`** | Add 1-Frame Window + Open Editor | Same as `I`, then open the editor scrolled to the new frame |
+| **`Y`** | Undo Last Keybind Frame | Remove the most recent frame added by `I` / `U` |
 | **Time Icon** | Pause Menu (Right side) | Open Frame Action Editor |
+
+Related settings: **Keybind Frame Offset** (added to the current tick, default 0), **Keybind Notifications** (default on) and **Auto-Recalculate L\* After Keybind** (default off). Keys are ignored while a text box is focused.
 
 ---
 
@@ -96,11 +120,17 @@ src/
 2. Edit frame numbers, frame window tolerances, or switch between **1P** and **2P** modes.
 3. Use **Activate All** / **Inactivate All** to bulk toggle drawing and HUD inclusion.
 
-### 3. Calculating Precision ($L^*$)
+### 3. Display Settings
+1. Click **Display** in the bottom bar of the main editor.
+2. Drag the sliders for **Precision Size**, **Counter Size**, **Marker Size**, **HUD Opacity** and **Window Size**. Values snap to 5% steps and are saved automatically.
+3. **Show Markers** hides/shows the in-game circles without touching the counters. **Reset Defaults** restores everything.
+
+### 4. Calculating Precision ($L^*$)
 1. Click the **Options** gear icon in the top-right of the Frame Editor to open the **Precision Display** popup.
 2. Toggle your desired metrics (Base, Nerve, Fatigue, CPS, etc.).
 3. *(Optional)* Click the top-right gear in the Precision Display to open **L* Calc Settings** to configure TPS, respawn time, target solve time, or model constants.
-4. Click **Start Calculation**. Once finished, cycle through metrics on the top status button or view live values in the bottom-left corner during level runs.
+4. Toggle **Base L\* %** to also show the Base $L^*$ percentage (bottom-left HUD and next to each frame in the list).
+5. Click **Start Calculation**. Once finished, cycle through metrics on the top status button or view live values in the bottom-left corner during level runs.
 
 ---
 
@@ -114,4 +144,10 @@ src/
 ### Build
    ```bash
    geode build
+   ```
+
+### Running the unit tests (no game needed)
+The pure logic behind the Base L* percentage, the sliders and the popup fit lives in `src/Math/DisplayMath.hpp` and is covered by `tests/displaymath_test.cpp`:
+   ```bash
+   g++ -std=c++20 -Wall -Wextra -o displaymath_test tests/displaymath_test.cpp && ./displaymath_test
    ```

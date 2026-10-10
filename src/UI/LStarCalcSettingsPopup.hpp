@@ -19,4 +19,5 @@ protected:
 
 public:
     static LStarCalcSettingsPopup* create();
+    void showInstant();
 };

@@ -22,6 +22,17 @@ constexpr double DEFAULT_K_T = 0.0016520833717346; // Nerve
 constexpr double DEFAULT_K_U = 0.0002727763242154; // Fatigue
 constexpr double DEFAULT_K_C = 0.2784421686721826; // CPS
 
+// 显示设置：默认值与允许范围（滑条映射到此范围）
+constexpr double DEFAULT_LABEL_SCALE = 1.0;        // 精度标签 / 计数标签 / 标记 默认倍率
+constexpr double MIN_LABEL_SCALE = 0.5;
+constexpr double MAX_LABEL_SCALE = 2.5;
+constexpr double DEFAULT_HUD_OPACITY = 1.0;        // HUD 文字不透明度
+constexpr double MIN_HUD_OPACITY = 0.2;
+constexpr double MAX_HUD_OPACITY = 1.0;
+constexpr double DEFAULT_WINDOW_SCALE = 1.0;       // 所有 Mod 弹窗的整体倍率
+constexpr double MIN_WINDOW_SCALE = 0.6;
+constexpr double MAX_WINDOW_SCALE = 1.4;
+
 inline void stopAlertAnimation(FLAlertLayer* alert) {
     if (!alert) return;
     if (alert->m_mainLayer) {

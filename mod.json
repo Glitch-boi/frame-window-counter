@@ -6,7 +6,7 @@
     "mac": "2.2081",
     "ios": "2.2081"
   },
-  "version": "v1.2.5",
+  "version": "v1.3.0",
   "id": "c0nscious.frame_window",
   "name": "Frame Window Counter",
   "developer": "C0nscious",
@@ -19,5 +19,79 @@
   "links": {
     "homepage": "https://space.bilibili.com/3494358087108748",
     "source": "https://github.com/hyper-5/frame-window-counter"
+  },
+  "settings": {
+    "open-editor-key": {
+      "type": "keybind",
+      "name": "Open / Close Editor",
+      "description": "Opens the Frame Window Editor, or closes it (and any Frame Window popup) if one is already open. Works anywhere in the game, same as the old hardcoded O key.",
+      "default": "O",
+      "platforms": [
+        "win",
+        "mac"
+      ]
+    },
+    "add-frame-key": {
+      "type": "keybind",
+      "name": "Add 1-Frame Window",
+      "description": "Adds a 1-frame window for player 1 on the CURRENT tick of the level you are playing. Does nothing if that tick already has a 1P frame.",
+      "default": "I",
+      "platforms": [
+        "win",
+        "mac"
+      ]
+    },
+    "add-frame-open-key": {
+      "type": "keybind",
+      "name": "Add 1-Frame Window + Open Editor",
+      "description": "Does the same as 'Add 1-Frame Window', then opens the Frame Window Editor and scrolls to the new frame (like pressing O).",
+      "default": "U",
+      "platforms": [
+        "win",
+        "mac"
+      ]
+    },
+    "undo-frame-key": {
+      "type": "keybind",
+      "name": "Undo Last Keybind Frame",
+      "description": "Removes the most recent frame that was added with one of the Add 1-Frame Window keybinds. (Default is Y: GD itself uses Z/X for practice-mode checkpoints, so those are best avoided.)",
+      "default": "Y",
+      "platforms": [
+        "win",
+        "mac"
+      ]
+    },
+    "keybind-frame-offset": {
+      "type": "int",
+      "name": "Keybind Frame Offset",
+      "description": "Added to the current tick when a keybind adds a frame. 0 = exactly the tick shown by the mod. Use 1 to place the frame on the next physics step if you press slightly after the input.",
+      "default": 0,
+      "min": -10,
+      "max": 10,
+      "platforms": [
+        "win",
+        "mac"
+      ]
+    },
+    "keybind-notify": {
+      "type": "bool",
+      "name": "Keybind Notifications",
+      "description": "Show a small pop-up when a keybind adds, skips, or undoes a frame.",
+      "default": true,
+      "platforms": [
+        "win",
+        "mac"
+      ]
+    },
+    "keybind-auto-recalc": {
+      "type": "bool",
+      "name": "Auto-Recalculate L* After Keybind",
+      "description": "Automatically restart the L* calculation after a keybind adds or removes a frame, so the HUD values and Base L* % stay up to date. Can be slow on very large macros.",
+      "default": false,
+      "platforms": [
+        "win",
+        "mac"
+      ]
+    }
   }
 }

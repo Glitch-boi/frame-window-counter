@@ -5,6 +5,7 @@
 #include "../Data/State.hpp"
 #include "../Common.hpp"
 #include "../Audio/SoundManager.hpp"
+#include "../Math/DisplayMath.hpp"
 #include "../UI/FrameActionPopup.hpp"
 #include <algorithm>
 #include <vector>
@@ -366,6 +367,46 @@ class $modify(MyPlayLayer, PlayLayer) {
         PlayLayer::onQuit();
     }
 
+    // 仅按最新的大小 / 透明度重建 HUD，不改动已统计的计数（供 Display Settings 滑条实时调用）
+    void refreshHUDLayout() {
+        if (!g_modEnabled) return;
+        this->rebuildHUD();
+        g_forcePrecRedraw = true;
+        m_fields->m_lastPrecIndex = -1;
+        this->updatePrecisionHUD(m_fields->m_currentFrame);
+    }
+
+    // 快捷键在"当前 tick"添加帧之后，立即在玩家身上生成一个标记作为视觉反馈
+    void spawnFeedbackMarkerNow(int frame, bool isPlayer2, double fw, int ifVal) {
+        if (!g_modEnabled || !this->m_player1) return;
+        // 尚未到达的帧会在 onPhysicsStep 里自然触发，这里不重复生成
+        if (frame > m_fields->m_lastFrame) return;
+
+        ccColor4F markerColor = { 1.f, 1.f, 1.f, 1.f };
+        std::string markerText = formatWindowVal(fw);
+        if (ifVal > 1) {
+            markerText += fmt::format(" ({}I/F)", ifVal);
+        }
+        std::string presetKey = makeWindowPresetKey(ifVal, fw);
+        if (g_windowPresets.contains(presetKey)) {
+            auto& preset = g_windowPresets[presetKey];
+            markerColor = preset.color;
+            if (!preset.customText.empty()) {
+                markerText = preset.customText;
+            }
+        }
+
+        CCPoint spawnPos = this->m_player1->getPosition();
+        if (isPlayer2 && this->m_player2) {
+            spawnPos = this->m_player2->getPosition();
+        }
+        this->spawnFrameWindowMarker(spawnPos, markerText, markerColor);
+
+        // 维持"同一帧同一玩家只生成一个标记"的不变量
+        if (isPlayer2) m_fields->m_lastSpawnFrame2P = frame;
+        else m_fields->m_lastSpawnFrame1P = frame;
+    }
+
     void recalculateAndRefreshHUD() {
         if (!g_modEnabled) {
             if (m_fields->m_hudNode) {
@@ -518,7 +559,8 @@ class $modify(MyPlayLayer, PlayLayer) {
                 auto lbl = CCLabelBMFont::create("Calculating L*... 0.0%", "bigFont.fnt");
                 lbl->setAnchorPoint({ 0.f, 0.f });
                 lbl->setPosition({ 0.f, 0.f });
-                lbl->setScale(0.35f);
+                lbl->setScale(0.35f * static_cast<float>(g_precLabelScale));
+                lbl->setOpacity(static_cast<GLubyte>(std::clamp(g_hudOpacity, 0.0, 1.0) * 255.0));
                 lbl->setColor({ 255, 200, 50 });
                 lbl->setID("computing-label"_spr);
                 m_fields->m_precNode->addChild(lbl);
@@ -565,6 +607,19 @@ class $modify(MyPlayLayer, PlayLayer) {
             else this->addChild(m_fields->m_precNode, 1);
 
             float currentY = 0.f;
+            const float precScale = static_cast<float>(g_precLabelScale);
+            const GLubyte hudOpacity = static_cast<GLubyte>(std::clamp(g_hudOpacity, 0.0, 1.0) * 255.0);
+
+            auto addText = [&](const std::string& text) {
+                auto lbl = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
+                lbl->setAnchorPoint({ 0.f, 0.f });
+                lbl->setPosition({ 0.f, currentY });
+                lbl->setScale(0.3f * precScale);
+                lbl->setOpacity(hudOpacity);
+                m_fields->m_precNode->addChild(lbl);
+                currentY += 12.f * precScale;
+                };
+
             auto addLabel = [&](bool show, const char* prefix, const std::vector<double>& arr) {
                 if (!show) return;
                 std::string text = prefix;
@@ -574,13 +629,7 @@ class $modify(MyPlayLayer, PlayLayer) {
                 else {
                     text += "0.00";
                 }
-
-                auto lbl = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
-                lbl->setAnchorPoint({ 0.f, 0.f });
-                lbl->setPosition({ 0.f, currentY });
-                lbl->setScale(0.3f);
-                m_fields->m_precNode->addChild(lbl);
-                currentY += 12.f;
+                addText(text);
                 };
 
             addLabel(g_showNFC, "Nerve+Fatigue+CPS L*: ", g_vNFC);
@@ -591,6 +640,11 @@ class $modify(MyPlayLayer, PlayLayer) {
             addLabel(g_showF, "Fatigue L*: ", g_vF);
             addLabel(g_showN, "Nerve L*: ", g_vN);
             addLabel(g_showBase, "L*: ", g_vBase);
+
+            // Base L* 精度百分比：当前输入累计到的 L* 占最终总 L* 的比例（按每次输入的 L* 贡献加权，而非按时间/帧数）
+            if (g_showBasePct) {
+                addText(fmt::format("L* %: {:.2f}%", dispmath::basePercentAtIndex(g_vBase, idx)));
+            }
         }
     }
 
@@ -616,7 +670,9 @@ class $modify(MyPlayLayer, PlayLayer) {
             CCLabelBMFont* countLbl;
         };
         std::vector<HudItem> items;
-        float maxTextWidth = 25.f;
+        const float cs = static_cast<float>(g_counterScale);
+        const double opacityMul = std::clamp(g_hudOpacity, 0.0, 1.0);
+        float maxTextWidth = 25.f * cs;
 
         for (int i = 99; i >= 0; i--) {
             std::string idStr = std::to_string(i);
@@ -627,31 +683,31 @@ class $modify(MyPlayLayer, PlayLayer) {
             int count = m_fields->m_hudCounts.contains(i) ? m_fields->m_hudCounts[i] : 0;
             auto textLabel = CCLabelBMFont::create((preset.text + ":").c_str(), "bigFont.fnt");
             textLabel->setAnchorPoint({ 0.f, 1.f });
-            textLabel->setScale(0.5f);
+            textLabel->setScale(0.5f * cs);
             textLabel->setColor({
                 static_cast<GLubyte>(preset.color.r * 255),
                 static_cast<GLubyte>(preset.color.g * 255),
                 static_cast<GLubyte>(preset.color.b * 255)
                 });
-            textLabel->setOpacity(static_cast<GLubyte>(preset.color.a * 255));
+            textLabel->setOpacity(static_cast<GLubyte>(preset.color.a * 255 * opacityMul));
 
             float currentWidth = textLabel->getScaledContentSize().width;
             if (currentWidth > maxTextWidth) maxTextWidth = currentWidth;
 
             auto countLabel = CCLabelBMFont::create(std::to_string(count).c_str(), "bigFont.fnt");
             countLabel->setAnchorPoint({ 0.f, 1.f });
-            countLabel->setScale(0.5f);
+            countLabel->setScale(0.5f * cs);
             countLabel->setColor({
                 static_cast<GLubyte>(preset.color.r * 255),
                 static_cast<GLubyte>(preset.color.g * 255),
                 static_cast<GLubyte>(preset.color.b * 255)
                 });
-            countLabel->setOpacity(static_cast<GLubyte>(preset.color.a * 255));
+            countLabel->setOpacity(static_cast<GLubyte>(preset.color.a * 255 * opacityMul));
 
             items.push_back({ i, textLabel, countLabel });
         }
 
-        float currentY = -10.f;
+        float currentY = -10.f * cs;
         for (auto& item : items) {
             item.textLbl->setPosition({ 0.f, currentY });
             m_fields->m_hudNode->addChild(item.textLbl);
@@ -660,7 +716,7 @@ class $modify(MyPlayLayer, PlayLayer) {
             m_fields->m_hudNode->addChild(item.countLbl);
 
             m_fields->m_countLabels[item.id] = item.countLbl;
-            currentY -= 18.f;
+            currentY -= 18.f * cs;
         }
     }
 
@@ -721,8 +777,8 @@ class $modify(MyPlayLayer, PlayLayer) {
         // 动画时长与幅度配置
         constexpr float TIME_UP = 0.06f; // 放大并变白的时长
         constexpr float TIME_DOWN = 0.20f; // 缩回并恢复原色的时长
-        constexpr float BASE_SCALE = 0.50f; // 常态尺寸
-        constexpr float PEAK_SCALE = 0.60f; // 弹起峰值尺寸
+        const float BASE_SCALE = 0.50f * static_cast<float>(g_counterScale); // 常态尺寸（随计数标签大小设置变化）
+        const float PEAK_SCALE = 0.60f * static_cast<float>(g_counterScale); // 弹起峰值尺寸
 
         // 缩放动画
         auto scaleUp = CCEaseSineOut::create(CCScaleTo::create(TIME_UP, PEAK_SCALE));
@@ -743,7 +799,7 @@ class $modify(MyPlayLayer, PlayLayer) {
         if (!this->m_objectLayer) return;
 
         CCSize winSize = CCDirector::get()->getWinSize();
-        float layerScale = std::abs(this->m_objectLayer->getScaleY());
+        float layerScale = std::abs(this->m_objectLayer->getScaleY()) * static_cast<float>(g_markerScale);
 
         constexpr float margin = 300.0f;
         float minX = -margin;
@@ -761,7 +817,8 @@ class $modify(MyPlayLayer, PlayLayer) {
             // 将物体层的世界坐标转换为屏幕坐标
             CCPoint screenPos = this->m_objectLayer->convertToWorldSpace(marker.worldPos);
             marker.node->setPosition(screenPos);
-            marker.node->setScale(layerScale); // 随摄像机缩放同步变化
+            marker.node->setScale(layerScale); // 随摄像机缩放 + 标记大小设置同步变化
+            marker.node->setVisible(g_showMarkers);
 
             // 越界清理
             if (screenPos.x < minX || screenPos.x > maxX || screenPos.y < minY || screenPos.y > maxY) {
@@ -920,6 +977,8 @@ class $modify(MyPlayLayer, PlayLayer) {
     }
 
     void spawnFrameWindowMarker(CCPoint pos, const std::string & displayStr, ccColor4F color) {
+        if (!g_showMarkers) return;
+
         auto markerNode = CCNode::create();
         markerNode->setID("frame-window-marker"_spr);
 
@@ -961,10 +1020,11 @@ class $modify(MyPlayLayer, PlayLayer) {
 
         if (this->m_objectLayer) {
             markerNode->setPosition(this->m_objectLayer->convertToWorldSpace(pos));
-            markerNode->setScale(std::abs(this->m_objectLayer->getScaleY()));
+            markerNode->setScale(std::abs(this->m_objectLayer->getScaleY()) * static_cast<float>(g_markerScale));
         }
         else {
             markerNode->setPosition(pos);
+            markerNode->setScale(static_cast<float>(g_markerScale));
         }
 
         m_fields->m_activeMarkers.push_back({ markerNode, pos });
@@ -988,7 +1048,19 @@ void triggerHUDRefresh() {
     }
 }
 
-// 导出当前物理帧号供 CCDirectorHook 调用
+void triggerHUDLayoutRefresh() {
+    if (auto pl = PlayLayer::get()) {
+        static_cast<MyPlayLayer*>(pl)->refreshHUDLayout();
+    }
+}
+
+void spawnFeedbackMarker(int frame, bool isPlayer2, double frameWindow, int ifCount) {
+    if (auto pl = PlayLayer::get()) {
+        static_cast<MyPlayLayer*>(pl)->spawnFeedbackMarkerNow(frame, isPlayer2, frameWindow, ifCount);
+    }
+}
+
+// 导出当前物理帧号供 CCDirectorHook / 快捷键调用
 int getCurrentPhysicsFrame() {
     if (auto pl = PlayLayer::get()) {
         return static_cast<MyPlayLayer*>(pl)->m_fields->m_currentFrame;

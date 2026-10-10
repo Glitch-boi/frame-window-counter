@@ -26,6 +26,15 @@ extern double g_kT;               // Nerve 常数
 extern double g_kU;               // Fatigue 常数
 extern double g_kC;               // CPS 常数
 
+// ---- 显示设置 (Display Settings) ----
+extern double g_precLabelScale;   // 精度标签 (左下角 L*) 大小倍率
+extern double g_counterScale;     // 计数标签 (左上角 HUD) 大小倍率
+extern double g_markerScale;      // 游戏内标记 (圆圈 + 文字) 大小倍率
+extern double g_hudOpacity;       // 精度/计数标签不透明度
+extern double g_windowScale;      // 所有 Mod 弹窗的整体大小倍率
+extern bool g_showMarkers;        // 是否显示游戏内标记
+extern bool g_showBasePct;        // 是否显示 Base L* 百分比 (HUD + 编辑器每行)
+
 extern std::atomic<int> g_calcId;
 extern std::atomic<bool> g_isCalculating;
 extern std::atomic<float> g_calcProgress;
@@ -52,5 +61,12 @@ void saveSettings();
 void saveFrames();
 void updateTickCache();
 void doAutoSave(GJGameLevel* level);
-void triggerHUDRefresh();
 void resetCalcSettingsToDefault();
+void saveDisplaySettings();              // 仅保存显示设置（滑条拖动时调用，开销很小）
+void resetDisplaySettingsToDefault();
+
+// ---- 在 PlayLayerHook.cpp 中实现，供 UI / 快捷键调用 ----
+int getCurrentPhysicsFrame();                               // 当前物理帧 (tick)
+void triggerHUDRefresh();                                   // 重新统计并重建 HUD 计数
+void triggerHUDLayoutRefresh();                             // 仅按新的大小/透明度重建 HUD，不改动计数
+void spawnFeedbackMarker(int frame, bool isPlayer2, double frameWindow, int ifCount); // 快捷键添加后在玩家处生成标记

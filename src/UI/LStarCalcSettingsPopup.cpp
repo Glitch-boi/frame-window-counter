@@ -1,6 +1,7 @@
 #include "LStarCalcSettingsPopup.hpp"
 #include "../Data/State.hpp"
 #include "../Common.hpp"
+#include "PopupScale.hpp"
 
 using namespace geode::prelude;
 
@@ -115,4 +116,12 @@ LStarCalcSettingsPopup* LStarCalcSettingsPopup::create() {
     }
     delete ret;
     return nullptr;
+}
+
+void LStarCalcSettingsPopup::showInstant() {
+    this->show();
+    if (this->m_mainLayer) {
+        this->m_mainLayer->stopAllActions();
+        applyWindowScale(this);
+    }
 }

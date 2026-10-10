@@ -1,8 +1,11 @@
 #include "FrameActionPopup.hpp"
+#include "PopupScale.hpp"
 #include "AddFramePopup.hpp"
 #include "WindowPresetPopup.hpp"
 #include "LabelPresetPopup.hpp"
 #include "PrecisionSettingsPopup.hpp"
+#include "DisplaySettingsPopup.hpp"
+#include "../Math/DisplayMath.hpp"
 #include "../Data/State.hpp"
 #include "../IO/FileIO.hpp"
 #include "../Common.hpp"
@@ -40,6 +43,17 @@ public:
         return CCMenu::ccTouchBegan(touch, event);
     }
 };
+
+// 某一帧对应的 Base L* 百分比文本：该帧(含)之前最后一次有效输入所累计的 L* 占总 L* 的比例。
+// 没有可用数据（未开启 / 计算中 / 还没算过）时返回空串。
+static std::string rowPercentText(int frame) {
+    if (!g_showBasePct) return "";
+    if (g_isCalculating.load()) return "";
+    if (g_validActions.empty() || g_vBase.size() != g_validActions.size()) return "";
+
+    int idx = dispmath::lastIndexAtOrBefore(g_validActions, frame);
+    return fmt::format("L* {:.2f}%", dispmath::basePercentAtIndex(g_vBase, idx));
+}
 
 bool FrameActionPopup::init() {
     if (!Popup::init(430.f, 280.f)) return false;
@@ -160,37 +174,44 @@ bool FrameActionPopup::init() {
 
     // 1. Labels
     auto backBtnSpr = ButtonSprite::create("Labels");
-    backBtnSpr->setScale(0.55f);
+    backBtnSpr->setScale(0.5f);
     auto backBtn = CCMenuItemSpriteExtra::create(backBtnSpr, this, menu_selector(FrameActionPopup::onSwitchToLabels));
-    backBtn->setPosition({ centerX - 150.f, bottomY });
+    backBtn->setPosition({ centerX - 170.f, bottomY });
     bottomMenu->addChild(backBtn);
 
     // 2. Windows
     auto winBtnSpr = ButtonSprite::create("Windows");
-    winBtnSpr->setScale(0.55f);
+    winBtnSpr->setScale(0.5f);
     auto winBtn = CCMenuItemSpriteExtra::create(winBtnSpr, this, menu_selector(FrameActionPopup::onSwitchToWindows));
-    winBtn->setPosition({ centerX - 75.f, bottomY });
+    winBtn->setPosition({ centerX - 102.f, bottomY });
     bottomMenu->addChild(winBtn);
+
+    // 2.5 Display（大小 / 透明度等显示设置）
+    auto dispBtnSpr = ButtonSprite::create("Display");
+    dispBtnSpr->setScale(0.5f);
+    auto dispBtn = CCMenuItemSpriteExtra::create(dispBtnSpr, this, menu_selector(FrameActionPopup::onOpenDisplay));
+    dispBtn->setPosition({ centerX - 34.f, bottomY });
+    bottomMenu->addChild(dispBtn);
 
     // 3. Merge（合并同帧输入）
     auto mergeBtnSpr = ButtonSprite::create("Merge");
-    mergeBtnSpr->setScale(0.55f);
+    mergeBtnSpr->setScale(0.5f);
     auto mergeBtn = CCMenuItemSpriteExtra::create(mergeBtnSpr, this, menu_selector(FrameActionPopup::onMergeFrames));
-    mergeBtn->setPosition({ centerX, bottomY });
+    mergeBtn->setPosition({ centerX + 34.f, bottomY });
     bottomMenu->addChild(mergeBtn);
 
     // 4. Import
     auto importBtnSpr = ButtonSprite::create("Import");
-    importBtnSpr->setScale(0.55f);
+    importBtnSpr->setScale(0.5f);
     auto importBtn = CCMenuItemSpriteExtra::create(importBtnSpr, this, menu_selector(FrameActionPopup::onImportGDR));
-    importBtn->setPosition({ centerX + 75.f, bottomY });
+    importBtn->setPosition({ centerX + 102.f, bottomY });
     bottomMenu->addChild(importBtn);
 
     // 5. Export
     auto exportBtnSpr = ButtonSprite::create("Export");
-    exportBtnSpr->setScale(0.55f);
+    exportBtnSpr->setScale(0.5f);
     auto exportBtn = CCMenuItemSpriteExtra::create(exportBtnSpr, this, menu_selector(FrameActionPopup::onExportFWC));
-    exportBtn->setPosition({ centerX + 150.f, bottomY });
+    exportBtn->setPosition({ centerX + 170.f, bottomY });
     bottomMenu->addChild(exportBtn);
 
     m_mainLayer->addChild(bottomMenu);
@@ -275,6 +296,14 @@ void FrameActionPopup::update(float dt) {
                 m_wasDirty = g_isLStarDirty.load();
             }
         }
+    }
+
+    // 开关 / 计算开始或结束 / 过期状态 / 有效动作数 任一变化时，刷新每行的 L* 百分比（不会重置滚动位置）
+    const uint64_t sig = (g_showBasePct ? 1ull : 0ull) | (isCalc ? 2ull : 0ull) |
+        (g_isLStarDirty.load() ? 4ull : 0ull) | (static_cast<uint64_t>(g_validActions.size()) << 3);
+    if (sig != m_pctSignature) {
+        m_pctSignature = sig;
+        this->updateCellPercents();
     }
 }
 
@@ -525,7 +554,35 @@ void FrameActionPopup::refreshList(bool rebuildKeys) {
             cell->setVisible(false);
         }
     }
+    this->updateCellPercents();
     m_scrollLayer->moveToTop();
+}
+
+void FrameActionPopup::updateCellPercents() {
+    if (!m_scrollLayer || !m_scrollLayer->m_contentLayer) return;
+    auto contentNode = m_scrollLayer->m_contentLayer->getChildByID("content-node"_spr);
+    if (!contentNode) return;
+
+    const bool stale = g_isLStarDirty.load();   // 动作/参数改过但还没重新计算：与顶部 L* 一样标红
+    for (int i = 0; i < m_itemsPerPage; i++) {
+        auto cell = contentNode->getChildByID(fmt::format("cell_{}", i));
+        if (!cell || !cell->isVisible()) continue;
+
+        auto pctLbl = typeinfo_cast<CCLabelBMFont*>(cell->getChildByID("pct-text"_spr));
+        auto frameLbl = typeinfo_cast<CCLabelBMFont*>(cell->getChildByID("frame-text"_spr));
+        if (!pctLbl || !frameLbl) continue;
+
+        std::string text = rowPercentText(cell->getTag());
+        bool has = !text.empty();
+
+        pctLbl->setVisible(has);
+        if (has) {
+            pctLbl->setString(text.c_str());
+            pctLbl->setColor(stale ? ccColor3B{ 255, 100, 100 } : ccColor3B{ 140, 200, 255 });
+        }
+        // 有第二行时帧号上移；没有时回到原来的垂直居中位置
+        frameLbl->setPositionY(has ? 27.f : 20.f);
+    }
 }
 
 CCNode* FrameActionPopup::createCellTemplate(int index) {
@@ -551,6 +608,16 @@ CCNode* FrameActionPopup::createCellTemplate(int index) {
     frameText->setScale(0.5f);
     frameText->setID("frame-text"_spr);
     cell->addChild(frameText);
+
+    // Base L* 百分比（仅在开启 "Base L* %" 且已有计算结果时显示；平时为空，布局与原来完全一致）
+    auto pctText = CCLabelBMFont::create("", "chatFont.fnt");
+    pctText->setAnchorPoint({ 0.f, 0.5f });
+    pctText->setPosition({ 8.f, 11.f });
+    pctText->setScale(0.38f);
+    pctText->setColor({ 140, 200, 255 });
+    pctText->setVisible(false);
+    pctText->setID("pct-text"_spr);
+    cell->addChild(pctText);
 
     auto pToggleSpr = ButtonSprite::create("1P");
     pToggleSpr->setScale(0.42f);
@@ -696,6 +763,23 @@ void FrameActionPopup::onSwitchToWindows(CCObject*) {
     }
 }
 
+void FrameActionPopup::onOpenDisplay(CCObject*) {
+    if (auto popup = DisplaySettingsPopup::create()) {
+        popup->showInstant();
+    }
+}
+
+void FrameActionPopup::reloadFromState() {
+    float savedScrollY = 0.f;
+    if (m_scrollLayer && m_scrollLayer->m_contentLayer) {
+        savedScrollY = m_scrollLayer->m_contentLayer->getPositionY();
+    }
+    this->refreshList(true);
+    if (m_scrollLayer && m_scrollLayer->m_contentLayer) {
+        m_scrollLayer->m_contentLayer->setPositionY(savedScrollY);
+    }
+}
+
 void FrameActionPopup::onExportFWC(CCObject*) {
     FileIO::exportFWC();
 }
@@ -720,7 +804,7 @@ void FrameActionPopup::showInstant() {
     this->show();
     if (this->m_mainLayer) {
         this->m_mainLayer->stopAllActions();
-        this->m_mainLayer->setScale(1.0f);
+        applyWindowScale(this); // 原为 setScale(1.0f)；现按「窗口大小」设置缩放
     }
     if (this->m_bgSprite) {
         this->m_bgSprite->stopAllActions();

@@ -1,4 +1,5 @@
 #include "PrecisionSettingsPopup.hpp"
+#include "PopupScale.hpp"
 #include "LStarCalcSettingsPopup.hpp"
 #include "../Data/State.hpp"
 #include "../Math/Calculator.hpp"
@@ -6,7 +7,7 @@
 using namespace geode::prelude;
 
 bool PrecisionSettingsPopup::init() {
-    if (!Popup::init(360.f, 210.f)) return false;
+    if (!Popup::init(360.f, 240.f)) return false;   // 比原来高 30，为第 5 行（Base L* %）腾出空间
     this->setTitle("Precision Display");
 
     auto size = m_mainLayer->getContentSize();
@@ -38,15 +39,18 @@ bool PrecisionSettingsPopup::init() {
         menu->addChild(toggle);
         };
 
-    addToggle("Base L*", g_showBase, menu_selector(PrecisionSettingsPopup::onTBase), centerX - 85.f, 150.f);
-    addToggle("Nerve L*", g_showN, menu_selector(PrecisionSettingsPopup::onTN), centerX - 85.f, 120.f);
-    addToggle("Fatigue L*", g_showF, menu_selector(PrecisionSettingsPopup::onTF), centerX - 85.f, 90.f);
-    addToggle("CPS L*", g_showC, menu_selector(PrecisionSettingsPopup::onTC), centerX - 85.f, 60.f);
+    addToggle("Base L*", g_showBase, menu_selector(PrecisionSettingsPopup::onTBase), centerX - 85.f, 180.f);
+    addToggle("Nerve L*", g_showN, menu_selector(PrecisionSettingsPopup::onTN), centerX - 85.f, 150.f);
+    addToggle("Fatigue L*", g_showF, menu_selector(PrecisionSettingsPopup::onTF), centerX - 85.f, 120.f);
+    addToggle("CPS L*", g_showC, menu_selector(PrecisionSettingsPopup::onTC), centerX - 85.f, 90.f);
 
-    addToggle("Nerve+Fatigue", g_showNF, menu_selector(PrecisionSettingsPopup::onTNF), centerX + 85.f, 150.f);
-    addToggle("Nerve+CPS", g_showNC, menu_selector(PrecisionSettingsPopup::onTNC), centerX + 85.f, 120.f);
-    addToggle("Fatigue+CPS", g_showFC, menu_selector(PrecisionSettingsPopup::onTFC), centerX + 85.f, 90.f);
-    addToggle("Nerve+Fatigue+CPS", g_showNFC, menu_selector(PrecisionSettingsPopup::onTNFC), centerX + 85.f, 60.f);
+    addToggle("Nerve+Fatigue", g_showNF, menu_selector(PrecisionSettingsPopup::onTNF), centerX + 85.f, 180.f);
+    addToggle("Nerve+CPS", g_showNC, menu_selector(PrecisionSettingsPopup::onTNC), centerX + 85.f, 150.f);
+    addToggle("Fatigue+CPS", g_showFC, menu_selector(PrecisionSettingsPopup::onTFC), centerX + 85.f, 120.f);
+    addToggle("Nerve+Fatigue+CPS", g_showNFC, menu_selector(PrecisionSettingsPopup::onTNFC), centerX + 85.f, 90.f);
+
+    // 仅针对 Base L*：当前输入累计到的 L* 占总 L* 的百分比（HUD 左下角 + 编辑器每行）
+    addToggle("Base L* %", g_showBasePct, menu_selector(PrecisionSettingsPopup::onTBasePct), centerX - 85.f, 60.f);
 
     m_calcBtnLabel = CCLabelBMFont::create("Start Calculation", "bigFont.fnt");
     m_calcBtnLabel->setScale(0.45f);
@@ -72,11 +76,12 @@ bool PrecisionSettingsPopup::init() {
 
 void PrecisionSettingsPopup::onOpenCalcSettings(CCObject*) {
     if (auto popup = LStarCalcSettingsPopup::create()) {
-        popup->show();
+        popup->showInstant();
     }
 }
 
 void PrecisionSettingsPopup::onTBase(CCObject*) { g_showBase = !g_showBase; saveSettings(); g_forcePrecRedraw = true; }
+void PrecisionSettingsPopup::onTBasePct(CCObject*) { g_showBasePct = !g_showBasePct; saveSettings(); g_forcePrecRedraw = true; }
 void PrecisionSettingsPopup::onTN(CCObject*) { g_showN = !g_showN; saveSettings(); g_forcePrecRedraw = true; }
 void PrecisionSettingsPopup::onTF(CCObject*) { g_showF = !g_showF; saveSettings(); g_forcePrecRedraw = true; }
 void PrecisionSettingsPopup::onTC(CCObject*) { g_showC = !g_showC; saveSettings(); g_forcePrecRedraw = true; }
@@ -115,7 +120,7 @@ void PrecisionSettingsPopup::showInstant() {
     this->show();
     if (this->m_mainLayer) {
         this->m_mainLayer->stopAllActions();
-        this->m_mainLayer->setScale(1.0f);
+        applyWindowScale(this); // 原为 setScale(1.0f)；现按「窗口大小」设置缩放
     }
     if (this->m_bgSprite) {
         this->m_bgSprite->stopAllActions();

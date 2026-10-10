@@ -1,6 +1,7 @@
 #include "State.hpp"
 #include "../Common.hpp"
 #include "../Math/Calculator.hpp"
+#include "../Math/DisplayMath.hpp"
 #include <Geode/utils/async.hpp>
 #include <filesystem>
 #include <fstream>
@@ -31,6 +32,15 @@ double g_kT = DEFAULT_K_T;
 double g_kU = DEFAULT_K_U;
 double g_kC = DEFAULT_K_C;
 
+// 显示设置
+double g_precLabelScale = DEFAULT_LABEL_SCALE;
+double g_counterScale = DEFAULT_LABEL_SCALE;
+double g_markerScale = DEFAULT_LABEL_SCALE;
+double g_hudOpacity = DEFAULT_HUD_OPACITY;
+double g_windowScale = DEFAULT_WINDOW_SCALE;
+bool g_showMarkers = true;
+bool g_showBasePct = false;
+
 // 多线程计算同步原子变量
 std::atomic<int> g_calcId{ 0 };                             // 当前计算任务唯一 ID
 std::atomic<bool> g_isCalculating{ false };                 // 是否正在计算中
@@ -56,6 +66,27 @@ void resetCalcSettingsToDefault() {
     saveSettings();
 }
 
+void saveDisplaySettings() {
+    Mod::get()->setSavedValue("disp-prec-scale", g_precLabelScale);
+    Mod::get()->setSavedValue("disp-counter-scale", g_counterScale);
+    Mod::get()->setSavedValue("disp-marker-scale", g_markerScale);
+    Mod::get()->setSavedValue("disp-hud-opacity", g_hudOpacity);
+    Mod::get()->setSavedValue("disp-window-scale", g_windowScale);
+    Mod::get()->setSavedValue("disp-show-markers", g_showMarkers);
+    Mod::get()->setSavedValue("show-base-pct", g_showBasePct);
+}
+
+void resetDisplaySettingsToDefault() {
+    g_precLabelScale = DEFAULT_LABEL_SCALE;
+    g_counterScale = DEFAULT_LABEL_SCALE;
+    g_markerScale = DEFAULT_LABEL_SCALE;
+    g_hudOpacity = DEFAULT_HUD_OPACITY;
+    g_windowScale = DEFAULT_WINDOW_SCALE;
+    g_showMarkers = true;
+    // g_showBasePct 属于 Precision Display 的开关，不随显示设置一起重置
+    saveDisplaySettings();
+}
+
 void loadModData() {
     static bool s_loaded = false;
     if (s_loaded) return;
@@ -79,6 +110,15 @@ void loadModData() {
     g_showNC = Mod::get()->getSavedValue<bool>("show-nc", false);
     g_showFC = Mod::get()->getSavedValue<bool>("show-fc", false);
     g_showNFC = Mod::get()->getSavedValue<bool>("show-nfc", false);
+
+    // 显示设置：读取后一律夹到合法范围，避免存档损坏 (NaN / 0 / 超大值) 导致 UI 消失或爆屏
+    g_precLabelScale = dispmath::clampOr(Mod::get()->getSavedValue<double>("disp-prec-scale", DEFAULT_LABEL_SCALE), MIN_LABEL_SCALE, MAX_LABEL_SCALE, DEFAULT_LABEL_SCALE);
+    g_counterScale = dispmath::clampOr(Mod::get()->getSavedValue<double>("disp-counter-scale", DEFAULT_LABEL_SCALE), MIN_LABEL_SCALE, MAX_LABEL_SCALE, DEFAULT_LABEL_SCALE);
+    g_markerScale = dispmath::clampOr(Mod::get()->getSavedValue<double>("disp-marker-scale", DEFAULT_LABEL_SCALE), MIN_LABEL_SCALE, MAX_LABEL_SCALE, DEFAULT_LABEL_SCALE);
+    g_hudOpacity = dispmath::clampOr(Mod::get()->getSavedValue<double>("disp-hud-opacity", DEFAULT_HUD_OPACITY), MIN_HUD_OPACITY, MAX_HUD_OPACITY, DEFAULT_HUD_OPACITY);
+    g_windowScale = dispmath::clampOr(Mod::get()->getSavedValue<double>("disp-window-scale", DEFAULT_WINDOW_SCALE), MIN_WINDOW_SCALE, MAX_WINDOW_SCALE, DEFAULT_WINDOW_SCALE);
+    g_showMarkers = Mod::get()->getSavedValue<bool>("disp-show-markers", true);
+    g_showBasePct = Mod::get()->getSavedValue<bool>("show-base-pct", false);
 
     for (int i = 0; i <= 99; i++) {
         std::string key = std::to_string(i);
@@ -119,6 +159,7 @@ void saveSettings() {
     Mod::get()->setSavedValue("show-nc", g_showNC);
     Mod::get()->setSavedValue("show-fc", g_showFC);
     Mod::get()->setSavedValue("show-nfc", g_showNFC);
+    saveDisplaySettings();
 }
 
 void updateTickCache() {

@@ -5,6 +5,7 @@
 #include <Geode/ui/ScrollLayer.hpp>
 #include <vector>
 #include <string>
+#include <cstdint>
 
 class FrameActionPopup : public geode::Popup {
 public:
@@ -18,6 +19,7 @@ public:
     cocos2d::CCLabelBMFont* m_finalLStarLabel = nullptr;
     bool m_wasCalculating = true;
     bool m_wasDirty = false;
+    uint64_t m_pctSignature = ~0ull;   // 上次刷新每行 L* 百分比时的状态签名（开关/计算中/过期/动作数）
 
 protected:
     geode::ScrollLayer* m_scrollLayer = nullptr;
@@ -48,6 +50,8 @@ protected:
 
     void onSwitchToLabels(cocos2d::CCObject*);
     void onSwitchToWindows(cocos2d::CCObject*);
+    void onOpenDisplay(cocos2d::CCObject*);
+    void updateCellPercents();
     void onExportFWC(cocos2d::CCObject*);
     void onImportGDR(cocos2d::CCObject*);
     void onMergeFrames(cocos2d::CCObject* sender);
@@ -59,6 +63,7 @@ public:
     void instantClose();
 
     void jumpToFrame(int targetFrame);
+    void reloadFromState();            // 外部（快捷键撤销等）修改了动作列表后刷新，保持滚动位置
     void doTrackingTick(int currentFrame);
     void highlightCell(int targetFrame);
     void scrollToCell(int indexInPage);

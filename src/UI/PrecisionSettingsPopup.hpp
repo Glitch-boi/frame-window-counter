@@ -8,6 +8,7 @@ protected:
 
     bool init() override;
     void onTBase(cocos2d::CCObject*);
+    void onTBasePct(cocos2d::CCObject*);
     void onTN(cocos2d::CCObject*);
     void onTF(cocos2d::CCObject*);
     void onTC(cocos2d::CCObject*);
