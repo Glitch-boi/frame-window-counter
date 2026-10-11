@@ -42,8 +42,7 @@ A comprehensive frame window tracking, HUD customization, and $L^*$ (NaNDL Preci
   * **Target Solve Time (s):** Expected completion time benchmark (default: 86,400s / 24 hours).
   * **Model Constants:** Fine-tune $K_T$, $K_U$, and $K_C$ up to 16 decimal places with one-click default restore.
 * **Dirty State Indication:** Automatically highlights $L^*$ values in red when frames or settings are modified without recalculating.
-* **Base $L^*$ Precision Percentage:** an optional `Base L* %` display showing how much of the *final* base $L^*$ has been reached at the current input, i.e. `L*(this input) / L*(final) x 100`. It is weighted by each input's $L^*$ contribution, not by time or input count: a level with 500 $L^*$ whose first 5% of inputs already carry 450 $L^*$ reads 90% there. Shown in the bottom-left HUD and under every row of the frame list.
-
+* **Base $L^*$ Precision Percentage:** an optional `Base L* %` display showing how much of the *final* base $L^*$ has been reached at the current input, i.e. `L*(this input) / L*(final) x 100`. It is weighted by each input's $L^*$ contribution.
 ### Action Editor & Macro Tooling
 * **Timeline Tracking:** Automatically highlights and scrolls to the active frame in real-time as the level plays.
 * **Dual Player (1P/2P) Control:** Toggle individual action player assignments on the fly.
@@ -152,12 +151,3 @@ Related settings: **Keybind Frame Offset** (added to the current tick, default 0
    ```bash
    geode build
    ```
-
-### Running the tests (no game needed)
-The logic that does not depend on Geode/FMOD is header-only and covered by tests:
-   ```bash
-   g++ -std=c++20 -Wall -Wextra -o displaymath_test tests/displaymath_test.cpp && ./displaymath_test      # Base L* %, sliders, popup fit
-   g++ -std=c++20 -O2 -Wall -Wextra -o hudtally_test tests/hudtally_test.cpp && ./hudtally_test            # HUD counting == original loops
-   g++ -std=c++20 -O2 -Wall -Wextra -pthread -o audiomixer_test tests/audiomixer_test.cpp && ./audiomixer_test   # mixer, 12k sounds/s, timing, threads
-   ```
-`audiomixer_test` also builds with `-fsanitize=thread` and `-fsanitize=address,undefined`.
