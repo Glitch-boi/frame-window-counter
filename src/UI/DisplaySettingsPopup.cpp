@@ -7,10 +7,10 @@
 using namespace geode::prelude;
 
 namespace {
-    constexpr double SCALE_STEP = 0.05;     // 所有滑条按 5% 吸附
-    constexpr float SLIDER_SCALE = 0.7f;    // 滑条整体缩放（GD 原生滑条默认偏宽）
-    constexpr float SLIDER_X = 222.f;       // 滑条中心 X
-    constexpr float VALUE_X = 334.f;        // 数值标签中心 X
+    constexpr double SCALE_STEP = 0.05;     // every slider snaps to 5%
+    constexpr float SLIDER_SCALE = 0.7f;    // GD's native slider is ~208 units wide; 0.7 -> ~146
+    constexpr float SLIDER_X = 222.f;       // slider centre X (spans ~149..295)
+    constexpr float VALUE_X = 334.f;        // percentage label centre X
 
     std::string percentText(double v) {
         return fmt::format("{}%", static_cast<int>(std::lround(v * 100.0)));
@@ -27,7 +27,7 @@ bool DisplaySettingsPopup::init() {
     menu->setPosition({ 0, 0 });
     m_mainLayer->addChild(menu);
 
-    // 一行 = 名称 + 滑条 + 当前百分比
+    // One row = name + slider + current percentage
     auto addRow = [&](const char* name, float y, SEL_MenuHandler selector,
                       Slider*& sliderOut, CCLabelBMFont*& valueOut) {
         auto nameLbl = CCLabelBMFont::create(name, "bigFont.fnt");
@@ -36,11 +36,18 @@ bool DisplaySettingsPopup::init() {
         nameLbl->setPosition({ 16.f, y });
         m_mainLayer->addChild(nameLbl);
 
+        // IMPORTANT: GD's Slider is a CCLayer whose content size is the whole SCREEN (569x320), so calling
+        // setScale() on it pivots around the screen centre and drags the slider ~(86, 49) units away from
+        // its row (that was the 1.3.0 misplacement bug). Scale a zero-size holder instead: its pivot is its
+        // own origin, and the slider inside stays unscaled and centred on that origin.
+        auto holder = CCNode::create();
+        holder->setPosition({ SLIDER_X, y });
+        holder->setScale(SLIDER_SCALE);
+        m_mainLayer->addChild(holder);
+
         sliderOut = Slider::create(this, selector);
-        sliderOut->setScale(SLIDER_SCALE);
-        sliderOut->setPosition({ SLIDER_X, y });
-        sliderOut->setLiveDragging(true);   // 拖动时实时回调，HUD 立即变化
-        m_mainLayer->addChild(sliderOut);
+        sliderOut->setLiveDragging(true);   // live callbacks while dragging, so the HUD follows the thumb
+        holder->addChild(sliderOut);
 
         valueOut = CCLabelBMFont::create("100%", "bigFont.fnt");
         valueOut->setScale(0.36f);
@@ -48,35 +55,49 @@ bool DisplaySettingsPopup::init() {
         m_mainLayer->addChild(valueOut);
     };
 
-    addRow("Precision Size", 232.f, menu_selector(DisplaySettingsPopup::onPrecSlider), m_precSlider, m_precValue);
-    addRow("Counter Size", 197.f, menu_selector(DisplaySettingsPopup::onCounterSlider), m_counterSlider, m_counterValue);
-    addRow("Marker Size", 162.f, menu_selector(DisplaySettingsPopup::onMarkerSlider), m_markerSlider, m_markerValue);
-    addRow("HUD Opacity", 127.f, menu_selector(DisplaySettingsPopup::onOpacitySlider), m_opacitySlider, m_opacityValue);
-    addRow("Window Size", 92.f, menu_selector(DisplaySettingsPopup::onWindowSlider), m_windowSlider, m_windowValue);
+    addRow("Precision Size", 238.f, menu_selector(DisplaySettingsPopup::onPrecSlider), m_precSlider, m_precValue);
+    addRow("Counter Size", 208.f, menu_selector(DisplaySettingsPopup::onCounterSlider), m_counterSlider, m_counterValue);
+    addRow("Marker Size", 178.f, menu_selector(DisplaySettingsPopup::onMarkerSlider), m_markerSlider, m_markerValue);
+    addRow("HUD Opacity", 148.f, menu_selector(DisplaySettingsPopup::onOpacitySlider), m_opacitySlider, m_opacityValue);
+    addRow("Sound Volume", 118.f, menu_selector(DisplaySettingsPopup::onVolumeSlider), m_volumeSlider, m_volumeValue);
+    addRow("Window Size", 88.f, menu_selector(DisplaySettingsPopup::onWindowSlider), m_windowSlider, m_windowValue);
 
-    // 显示游戏内标记 开关
+    // Switches: Show Markers (left) and Notifications (right)
     auto markerLbl = CCLabelBMFont::create("Show Markers", "bigFont.fnt");
     markerLbl->setScale(0.36f);
     markerLbl->setAnchorPoint({ 0.f, 0.5f });
-    markerLbl->setPosition({ 16.f, 58.f });
+    markerLbl->setPosition({ 16.f, 56.f });
     m_mainLayer->addChild(markerLbl);
 
     m_markerToggle = CCMenuItemToggler::createWithStandardSprites(
         this, menu_selector(DisplaySettingsPopup::onToggleMarkers), 0.6f
     );
-    m_markerToggle->setPosition({ 140.f, 58.f });
+    m_markerToggle->setPosition({ 120.f, 56.f });
     menu->addChild(m_markerToggle);
 
-    // 重置
+    auto notifyLbl = CCLabelBMFont::create("Notifications", "bigFont.fnt");
+    notifyLbl->setScale(0.36f);
+    notifyLbl->setAnchorPoint({ 0.f, 0.5f });
+    notifyLbl->setPosition({ 190.f, 56.f });
+    m_mainLayer->addChild(notifyLbl);
+
+    m_notifyToggle = CCMenuItemToggler::createWithStandardSprites(
+        this, menu_selector(DisplaySettingsPopup::onToggleNotifications), 0.6f
+    );
+    m_notifyToggle->setPosition({ 298.f, 56.f });
+    menu->addChild(m_notifyToggle);
+
+    // Reset
     auto resetSpr = ButtonSprite::create("Reset Defaults", "goldFont.fnt", "GJ_button_05.png", 0.8f);
     resetSpr->setScale(0.7f);
     auto resetBtn = CCMenuItemSpriteExtra::create(
         resetSpr, this, menu_selector(DisplaySettingsPopup::onResetDefaults)
     );
-    resetBtn->setPosition({ size.width / 2, 24.f });
+    resetBtn->setPosition({ size.width / 2, 22.f });
     menu->addChild(resetBtn);
 
     this->syncFromState();
+    this->scheduleUpdate();
     return true;
 }
 
@@ -86,8 +107,10 @@ void DisplaySettingsPopup::syncFromState() {
     if (m_counterSlider) m_counterSlider->setValue(dispmath::valueToSlider(g_counterScale, MIN_LABEL_SCALE, MAX_LABEL_SCALE));
     if (m_markerSlider) m_markerSlider->setValue(dispmath::valueToSlider(g_markerScale, MIN_LABEL_SCALE, MAX_LABEL_SCALE));
     if (m_opacitySlider) m_opacitySlider->setValue(dispmath::valueToSlider(g_hudOpacity, MIN_HUD_OPACITY, MAX_HUD_OPACITY));
+    if (m_volumeSlider) m_volumeSlider->setValue(dispmath::valueToSlider(g_soundVolume, MIN_SOUND_VOLUME, MAX_SOUND_VOLUME));
     if (m_windowSlider) m_windowSlider->setValue(dispmath::valueToSlider(g_windowScale, MIN_WINDOW_SCALE, MAX_WINDOW_SCALE));
     if (m_markerToggle) m_markerToggle->toggle(g_showMarkers);
+    if (m_notifyToggle) m_notifyToggle->toggle(g_showNotifications);
     m_syncing = false;
 
     this->updateValueLabels();
@@ -98,16 +121,17 @@ void DisplaySettingsPopup::updateValueLabels() {
     if (m_counterValue) m_counterValue->setString(percentText(g_counterScale).c_str());
     if (m_markerValue) m_markerValue->setString(percentText(g_markerScale).c_str());
     if (m_opacityValue) m_opacityValue->setString(percentText(g_hudOpacity).c_str());
+    if (m_volumeValue) m_volumeValue->setString(percentText(g_soundVolume).c_str());
     if (m_windowValue) m_windowValue->setString(percentText(g_windowScale).c_str());
 }
 
-// 滑条回调：直接读取对应滑条当前位置 (0~1)，映射到真实范围
+// Slider callbacks read the slider's current position (0..1) and map it to the real range.
 void DisplaySettingsPopup::onPrecSlider(CCObject*) {
     if (m_syncing || !m_precSlider) return;
     g_precLabelScale = dispmath::sliderToValue(m_precSlider->getValue(), MIN_LABEL_SCALE, MAX_LABEL_SCALE, SCALE_STEP);
     saveDisplaySettings();
     this->updateValueLabels();
-    triggerHUDLayoutRefresh();
+    m_hudDirty = true;
 }
 
 void DisplaySettingsPopup::onCounterSlider(CCObject*) {
@@ -115,14 +139,14 @@ void DisplaySettingsPopup::onCounterSlider(CCObject*) {
     g_counterScale = dispmath::sliderToValue(m_counterSlider->getValue(), MIN_LABEL_SCALE, MAX_LABEL_SCALE, SCALE_STEP);
     saveDisplaySettings();
     this->updateValueLabels();
-    triggerHUDLayoutRefresh();
+    m_hudDirty = true;
 }
 
 void DisplaySettingsPopup::onMarkerSlider(CCObject*) {
     if (m_syncing || !m_markerSlider) return;
     g_markerScale = dispmath::sliderToValue(m_markerSlider->getValue(), MIN_LABEL_SCALE, MAX_LABEL_SCALE, SCALE_STEP);
     saveDisplaySettings();
-    this->updateValueLabels();   // 已存在的标记会在下一次 tick 自动应用新大小
+    this->updateValueLabels();   // existing markers pick up the new size on the next tick
 }
 
 void DisplaySettingsPopup::onOpacitySlider(CCObject*) {
@@ -130,7 +154,14 @@ void DisplaySettingsPopup::onOpacitySlider(CCObject*) {
     g_hudOpacity = dispmath::sliderToValue(m_opacitySlider->getValue(), MIN_HUD_OPACITY, MAX_HUD_OPACITY, SCALE_STEP);
     saveDisplaySettings();
     this->updateValueLabels();
-    triggerHUDLayoutRefresh();
+    m_hudDirty = true;
+}
+
+void DisplaySettingsPopup::onVolumeSlider(CCObject*) {
+    if (m_syncing || !m_volumeSlider) return;
+    g_soundVolume = dispmath::sliderToValue(m_volumeSlider->getValue(), MIN_SOUND_VOLUME, MAX_SOUND_VOLUME, SCALE_STEP);
+    saveDisplaySettings();
+    this->updateValueLabels();   // the audio engine picks the new volume up on the next sound
 }
 
 void DisplaySettingsPopup::onWindowSlider(CCObject*) {
@@ -139,8 +170,8 @@ void DisplaySettingsPopup::onWindowSlider(CCObject*) {
     saveDisplaySettings();
     this->updateValueLabels();
 
-    // 实时预览：缩放场景中其他已打开的 Mod 弹窗（例如底下的编辑器）。
-    // 本弹窗自身不在拖动时缩放（否则滑块会从手指下滑走），关闭后再次打开即生效。
+    // Live preview on the OTHER open mod windows (e.g. the editor underneath). This popup is not rescaled
+    // while dragging, otherwise the thumb would slide out from under the finger; it applies on next open.
     applyWindowScaleToOpenModPopups(this);
 }
 
@@ -149,15 +180,34 @@ void DisplaySettingsPopup::onToggleMarkers(CCObject*) {
     saveDisplaySettings();
 }
 
+void DisplaySettingsPopup::onToggleNotifications(CCObject*) {
+    g_showNotifications = !g_showNotifications;
+    saveDisplaySettings();
+}
+
 void DisplaySettingsPopup::onResetDefaults(CCObject*) {
     resetDisplaySettingsToDefault();
     this->syncFromState();
+    m_hudDirty = false;
     triggerHUDLayoutRefresh();
-    // 点击而非拖动，可以连同自身一起立即应用
+    // A click, not a drag, so this popup can be rescaled together with the others right away
     applyWindowScaleToOpenModPopups(nullptr);
 }
 
+// Rebuilding the HUD on every drag event is wasteful (several events can arrive per frame): do it once per frame.
+void DisplaySettingsPopup::update(float dt) {
+    Popup::update(dt);
+    if (m_hudDirty) {
+        m_hudDirty = false;
+        triggerHUDLayoutRefresh();
+    }
+}
+
 void DisplaySettingsPopup::onClose(CCObject* sender) {
+    if (m_hudDirty) {
+        m_hudDirty = false;
+        triggerHUDLayoutRefresh();
+    }
     saveDisplaySettings();
     Popup::onClose(sender);
 }

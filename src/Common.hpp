@@ -32,6 +32,9 @@ constexpr double MAX_HUD_OPACITY = 1.0;
 constexpr double DEFAULT_WINDOW_SCALE = 1.0;       // 所有 Mod 弹窗的整体倍率
 constexpr double MIN_WINDOW_SCALE = 0.6;
 constexpr double MAX_WINDOW_SCALE = 1.4;
+constexpr double DEFAULT_SOUND_VOLUME = 1.0;       // 本 Mod 音效音量（叠加在游戏 SFX 音量之上）
+constexpr double MIN_SOUND_VOLUME = 0.0;
+constexpr double MAX_SOUND_VOLUME = 1.0;
 
 inline void stopAlertAnimation(FLAlertLayer* alert) {
     if (!alert) return;

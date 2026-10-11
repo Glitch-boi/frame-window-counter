@@ -6,6 +6,8 @@
 #include "../Common.hpp"
 #include "../Audio/SoundManager.hpp"
 #include "../Math/DisplayMath.hpp"
+#include "../Math/HudTally.hpp"
+#include <cstring>
 #include "../UI/FrameActionPopup.hpp"
 #include <algorithm>
 #include <vector>
@@ -37,6 +39,7 @@ class $modify(MyPlayLayer, PlayLayer) {
         bool m_wasCalculating = false;                          // 记录上一帧是否处于后台计算中
         std::vector<ActiveMarker> m_activeMarkers;              // 记录标记节点及其原始世界坐标
         std::map<int, Ref<CCLabelBMFont>> m_countLabels;        // 缓存各预设的数字标签以支持高性能局部文本刷新
+        std::map<int, int> m_shownCounts;                       // Current number shown on each count label; skip setString when unchanged
 
         // 1P 与 2P 分立的最近画圈帧号记录
         int m_lastSpawnFrame1P = -1;
@@ -76,6 +79,13 @@ class $modify(MyPlayLayer, PlayLayer) {
 
         this->rebuildHUD();
         this->schedule(schedule_selector(MyPlayLayer::onMyTick));
+
+        // Decode the level's sounds up front so the first hit during play doesn't hitch
+        for (auto const& [idStr, preset] : g_labelPresets) {
+            if (!preset.audioPath.empty() && preset.showInHud) {
+                SoundManager::preload(preset.audioPath);
+            }
+        }
 
         return true;
     }
@@ -407,6 +417,12 @@ class $modify(MyPlayLayer, PlayLayer) {
         else m_fields->m_lastSpawnFrame1P = frame;
     }
 
+    // Adds, for every drawable action with frame <= upToFrame, one hit to each preset it matches (caller clears first).
+    // The algorithm lives in Math/HudTally.hpp, where it is tested against the original naive loops.
+    void tallyHudCountsUpTo(int upToFrame) {
+        hudtally::tallyUpTo(g_tickActionsCache, g_labelPresets, upToFrame, m_fields->m_hudCounts);
+    }
+
     void recalculateAndRefreshHUD() {
         if (!g_modEnabled) {
             if (m_fields->m_hudNode) {
@@ -418,18 +434,7 @@ class $modify(MyPlayLayer, PlayLayer) {
         }
 
         m_fields->m_hudCounts.clear();
-        for (const auto& action : g_tickActionsCache) {
-            if (action.shouldDraw && action.frame <= m_fields->m_lastFrame) {
-                double fw = action.frameWindow;
-                double ifVal = static_cast<double>(action.ifCount);
-                for (const auto& [idStr, preset] : g_labelPresets) {
-                    double targetVal = preset.useIF ? ifVal : fw;
-                    if (targetVal >= preset.minVal && targetVal <= preset.maxVal) {
-                        m_fields->m_hudCounts[preset.id]++;
-                    }
-                }
-            }
-        }
+        this->tallyHudCountsUpTo(m_fields->m_lastFrame);
         this->rebuildHUD();
     }
 
@@ -503,18 +508,7 @@ class $modify(MyPlayLayer, PlayLayer) {
         m_fields->m_activeMarkers.clear();
 
         // 重新统计复活起点之前的 HUD 数据
-        for (const auto& action : g_tickActionsCache) {
-            if (action.shouldDraw && action.frame <= m_fields->m_lastFrame) {
-                double fw = action.frameWindow;
-                double ifVal = static_cast<double>(action.ifCount);
-                for (const auto& [idStr, preset] : g_labelPresets) {
-                    double targetVal = preset.useIF ? ifVal : fw;
-                    if (targetVal >= preset.minVal && targetVal <= preset.maxVal) {
-                        m_fields->m_hudCounts[preset.id]++;
-                    }
-                }
-            }
-        }
+        this->tallyHudCountsUpTo(m_fields->m_lastFrame);
 
         this->updateHUDCounts();
         this->updatePrecisionHUD(m_fields->m_currentFrame);
@@ -654,6 +648,7 @@ class $modify(MyPlayLayer, PlayLayer) {
             m_fields->m_hudNode = nullptr;
         }
         m_fields->m_countLabels.clear();
+        m_fields->m_shownCounts.clear();
 
         if (!g_modEnabled) return;
 
@@ -705,6 +700,7 @@ class $modify(MyPlayLayer, PlayLayer) {
             countLabel->setOpacity(static_cast<GLubyte>(preset.color.a * 255 * opacityMul));
 
             items.push_back({ i, textLabel, countLabel });
+            m_fields->m_shownCounts[i] = count; // the label was created with this value
         }
 
         float currentY = -10.f * cs;
@@ -738,7 +734,10 @@ class $modify(MyPlayLayer, PlayLayer) {
         for (auto& [id, countLbl] : m_fields->m_countLabels) {
             if (countLbl) {
                 int count = m_fields->m_hudCounts.contains(id) ? m_fields->m_hudCounts[id] : 0;
+                auto shown = m_fields->m_shownCounts.find(id);
+                if (shown != m_fields->m_shownCounts.end() && shown->second == count) continue; // unchanged: skip the expensive setString
                 countLbl->setString(std::to_string(count).c_str());
+                m_fields->m_shownCounts[id] = count;
             }
         }
     }
@@ -856,18 +855,7 @@ class $modify(MyPlayLayer, PlayLayer) {
             }
             m_fields->m_activeMarkers.clear();
 
-            for (const auto& action : g_tickActionsCache) {
-                if (action.shouldDraw && action.frame <= m_fields->m_lastFrame) {
-                    double fw = action.frameWindow;
-                    double ifVal = static_cast<double>(action.ifCount);
-                    for (const auto& [idStr, preset] : g_labelPresets) {
-                        double targetVal = preset.useIF ? ifVal : fw;
-                        if (targetVal >= preset.minVal && targetVal <= preset.maxVal) {
-                            m_fields->m_hudCounts[preset.id]++;
-                        }
-                    }
-                }
-            }
+            this->tallyHudCountsUpTo(m_fields->m_lastFrame);
             this->updateHUDCounts();
         }
 
@@ -879,26 +867,16 @@ class $modify(MyPlayLayer, PlayLayer) {
             auto it = std::upper_bound(g_tickActionsCache.begin(), g_tickActionsCache.end(), m_fields->m_lastFrame,
                 [](int frame, const FrameAction& a) { return frame < a.frame; });
 
+            // Actions with the same (window, I/F) inside one physics step match exactly the same presets:
+            // scan the presets once per distinct pair, accumulate hit counts, and apply them to the HUD once
+            // after the loop (a high-CPS macro can have dozens of inputs in a single tick).
+            hudtally::MatchCache<std::map<std::string, LabelPreset>> matcher(g_labelPresets);
+
             while (it != g_tickActionsCache.end() && it->frame <= currentFrame) {
                 auto& action = *it;
                 if (action.shouldDraw) {
                     double fw = action.frameWindow;
                     int ifVal = action.ifCount;
-                    ccColor4F markerColor = { 1.f, 1.f, 1.f, 1.f };
-
-                    std::string markerText = formatWindowVal(fw);
-                    if (ifVal > 1) {
-                        markerText += fmt::format(" ({}I/F)", ifVal);
-                    }
-
-                    std::string presetKey = makeWindowPresetKey(ifVal, fw);
-                    if (g_windowPresets.contains(presetKey)) {
-                        auto& preset = g_windowPresets[presetKey];
-                        markerColor = preset.color;
-                        if (!preset.customText.empty()) {
-                            markerText = preset.customText;
-                        }
-                    }
 
                     bool shouldSpawnMarker = false;
                     if (!action.isPlayer2) {
@@ -914,7 +892,23 @@ class $modify(MyPlayLayer, PlayLayer) {
                         }
                     }
 
-                    if (shouldSpawnMarker) {
+                    if (shouldSpawnMarker && g_showMarkers) {
+                        // marker text / colour are only computed when a marker is really spawned
+                        ccColor4F markerColor = { 1.f, 1.f, 1.f, 1.f };
+                        std::string markerText = formatWindowVal(fw);
+                        if (ifVal > 1) {
+                            markerText += fmt::format(" ({}I/F)", ifVal);
+                        }
+
+                        std::string presetKey = makeWindowPresetKey(ifVal, fw);
+                        if (g_windowPresets.contains(presetKey)) {
+                            auto& preset = g_windowPresets[presetKey];
+                            markerColor = preset.color;
+                            if (!preset.customText.empty()) {
+                                markerText = preset.customText;
+                            }
+                        }
+
                         CCPoint spawnPos = this->m_player1->getPosition();
                         if (action.isPlayer2 && this->m_player2) {
                             spawnPos = this->m_player2->getPosition();
@@ -922,21 +916,33 @@ class $modify(MyPlayLayer, PlayLayer) {
                         this->spawnFrameWindowMarker(spawnPos, markerText, markerColor);
                     }
 
-                    for (auto& [idStr, preset] : g_labelPresets) {
-                        double targetVal = preset.useIF ? static_cast<double>(ifVal) : fw;
-                        if (targetVal >= preset.minVal && targetVal <= preset.maxVal) {
-                            if (!skipAudio && !preset.audioPath.empty() && preset.showInHud) {
-                                SoundManager::playSound(preset.audioPath);
-                            }
-                            m_fields->m_hudCounts[preset.id]++;
-                            if (preset.showInHud) {
-                                needsHudUpdate = true;
-                                updatedPresets.push_back(preset.id);
+                    auto& kh = matcher.hitsFor(fw, ifVal);
+                    kh.actionCount++;
+                    if (!skipAudio) {
+                        for (LabelPreset* preset : kh.hits) {
+                            if (!preset->audioPath.empty() && preset->showInHud) {
+                                // Not played one by one any more: queued with its frame number and handed
+                                // to the mixer in one batch when this physics step is done.
+                                SoundManager::queueFrameSound(preset->audioPath, action.frame);
                             }
                         }
                     }
                 }
                 it++;
+            }
+
+            if (!skipAudio) {
+                SoundManager::flushFrameSounds();
+            }
+
+            for (auto& kh : matcher.entries()) {
+                for (LabelPreset* preset : kh.hits) {
+                    m_fields->m_hudCounts[preset->id] += kh.actionCount;
+                    if (preset->showInHud) {
+                        needsHudUpdate = true;
+                        updatedPresets.push_back(preset->id);
+                    }
+                }
             }
 
             m_fields->m_lastFrame = currentFrame;

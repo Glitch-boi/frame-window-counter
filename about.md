@@ -9,7 +9,8 @@ A utility mod for Geometry Dash designed to track frame windows, spawn custom vi
 * **Custom Markers & HUD:** Display custom text, colors, and audio effects on specific frames, with a live HUD counter for configured frame window ranges.
 * **Macro Integration:** Import `.fwc`, `.gdr`, `.gdr2`, `.json` (NaNDL), or `.slc` (Silicate) macro files. Export setups as `.fwc` or NaNDL `.json`.
 * **Keybinds (Desktop):** Add a 1-frame window on the current tick with one key press, optionally open the editor at the same time, and undo. All keys are rebindable in the mod settings.
-* **Display Settings:** Sliders for precision-label, counter-label and marker size, HUD opacity, and the size of every window.
+* **Display Settings:** Sliders for precision-label, counter-label and marker size, HUD opacity, sound volume, and the size of every window, plus switches for markers and notifications.
+* **High-Rate Audio:** A software-mixed SFX engine plays every sound with unlimited overlap (no more "each sound cuts the previous one"), even for macros with thousands of inputs per second.
 * **Base L\* %:** See how much of the final Base L\* is reached at each input.
 
 ---

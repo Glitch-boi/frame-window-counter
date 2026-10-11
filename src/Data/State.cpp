@@ -40,6 +40,8 @@ double g_hudOpacity = DEFAULT_HUD_OPACITY;
 double g_windowScale = DEFAULT_WINDOW_SCALE;
 bool g_showMarkers = true;
 bool g_showBasePct = false;
+double g_soundVolume = DEFAULT_SOUND_VOLUME;
+bool g_showNotifications = true;
 
 // 多线程计算同步原子变量
 std::atomic<int> g_calcId{ 0 };                             // 当前计算任务唯一 ID
@@ -74,6 +76,13 @@ void saveDisplaySettings() {
     Mod::get()->setSavedValue("disp-window-scale", g_windowScale);
     Mod::get()->setSavedValue("disp-show-markers", g_showMarkers);
     Mod::get()->setSavedValue("show-base-pct", g_showBasePct);
+    Mod::get()->setSavedValue("disp-sound-volume", g_soundVolume);
+    Mod::get()->setSavedValue("disp-notifications", g_showNotifications);
+}
+
+void showModNotification(std::string const& text, geode::NotificationIcon icon) {
+    if (!g_showNotifications) return;
+    geode::Notification::create(text, icon)->show();
 }
 
 void resetDisplaySettingsToDefault() {
@@ -83,6 +92,8 @@ void resetDisplaySettingsToDefault() {
     g_hudOpacity = DEFAULT_HUD_OPACITY;
     g_windowScale = DEFAULT_WINDOW_SCALE;
     g_showMarkers = true;
+    g_soundVolume = DEFAULT_SOUND_VOLUME;
+    g_showNotifications = true;
     // g_showBasePct 属于 Precision Display 的开关，不随显示设置一起重置
     saveDisplaySettings();
 }
@@ -119,6 +130,8 @@ void loadModData() {
     g_windowScale = dispmath::clampOr(Mod::get()->getSavedValue<double>("disp-window-scale", DEFAULT_WINDOW_SCALE), MIN_WINDOW_SCALE, MAX_WINDOW_SCALE, DEFAULT_WINDOW_SCALE);
     g_showMarkers = Mod::get()->getSavedValue<bool>("disp-show-markers", true);
     g_showBasePct = Mod::get()->getSavedValue<bool>("show-base-pct", false);
+    g_soundVolume = dispmath::clampOr(Mod::get()->getSavedValue<double>("disp-sound-volume", DEFAULT_SOUND_VOLUME), MIN_SOUND_VOLUME, MAX_SOUND_VOLUME, DEFAULT_SOUND_VOLUME);
+    g_showNotifications = Mod::get()->getSavedValue<bool>("disp-notifications", true);
 
     for (int i = 0; i <= 99; i++) {
         std::string key = std::to_string(i);
@@ -257,7 +270,7 @@ void doAutoSave(GJGameLevel* level) {
             }
             f.close();
             geode::Loader::get()->queueInMainThread([]() {
-                geode::Notification::create("Auto-saved FWC", geode::NotificationIcon::Success)->show();
+                showModNotification("Auto-saved FWC", geode::NotificationIcon::Success);
                 });
         }
         catch (const std::exception& e) {

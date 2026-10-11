@@ -34,6 +34,8 @@ extern double g_hudOpacity;       // 精度/计数标签不透明度
 extern double g_windowScale;      // 所有 Mod 弹窗的整体大小倍率
 extern bool g_showMarkers;        // 是否显示游戏内标记
 extern bool g_showBasePct;        // 是否显示 Base L* 百分比 (HUD + 编辑器每行)
+extern double g_soundVolume;      // 本 Mod 音效音量 (0~1)，叠加在游戏 SFX 音量之上
+extern bool g_showNotifications;  // 是否显示本 Mod 的所有通知（自动保存、快捷键提示等）
 
 extern std::atomic<int> g_calcId;
 extern std::atomic<bool> g_isCalculating;
@@ -64,6 +66,9 @@ void doAutoSave(GJGameLevel* level);
 void resetCalcSettingsToDefault();
 void saveDisplaySettings();              // 仅保存显示设置（滑条拖动时调用，开销很小）
 void resetDisplaySettingsToDefault();
+
+// 本 Mod 所有的 Notification 都必须经过这里，这样「Show Notifications」开关才能一次性关掉全部提示。
+void showModNotification(std::string const& text, geode::NotificationIcon icon = geode::NotificationIcon::Success);
 
 // ---- 在 PlayLayerHook.cpp 中实现，供 UI / 快捷键调用 ----
 int getCurrentPhysicsFrame();                               // 当前物理帧 (tick)

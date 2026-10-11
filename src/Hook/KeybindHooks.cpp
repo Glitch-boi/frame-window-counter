@@ -84,9 +84,9 @@ namespace {
         }
     }
 
+    // 所有提示都走 showModNotification，受 Display Settings 里的「Notifications」总开关控制
     void notify(std::string const& text, NotificationIcon icon) {
-        if (!Mod::get()->getSettingValue<bool>("keybind-notify")) return;
-        Notification::create(text, icon)->show();
+        showModNotification(text, icon);
     }
 
     // 与 AddFramePopup / 合并功能使用同一套 key 规则： "<帧>_<0|1>_<序号>"

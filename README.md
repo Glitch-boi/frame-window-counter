@@ -10,15 +10,21 @@ A comprehensive frame window tracking, HUD customization, and $L^*$ (NaNDL Preci
 * **Custom Audio Effects:** Bind dedicated sound effects (`.ogg`, `.mp3`) to specific frame window presets.
 * **Camera Compatibility:** Full world-to-screen matrix transformations ensuring markers properly track through rotations, zoom, and reversed gravity.
 
+### Audio Engine (new in 1.4.0)
+* **Unlimited overlap:** all sounds are mixed into a single stream instead of one FMOD channel per sound, so fast macros (thousands of inputs per second) are no longer cut off by "the next sound overwrites the previous one". There is no per-second limit.
+* **Sample-accurate timing:** sounds are placed from the game's frame numbers, and inputs within one tick are spread across that tick.
+* **Safe by design:** a look-ahead limiter prevents clipping, decoded sounds are cached at level start, and the old engine is used automatically if the mixer can't start (or manually via *Use Legacy Audio Engine*). *Audio Buffer Size* trades delay for stability.
+
 ### Keybinds & Quick Capture (Desktop)
 * **Add 1-Frame Window:** One key press adds a 1-frame window for player 1 on the *current tick* of the level you are playing (duplicate ticks are skipped).
 * **Add + Open Editor:** Same as above, then opens the Frame Window Editor scrolled to the new frame.
-* **Undo Last Keybind Frame**, optional **frame offset**, optional **on-screen notifications** and optional **auto-recalculate L*** after each add.
+* **Undo Last Keybind Frame**, optional **frame offset** and optional **auto-recalculate L*** after each add.
 * Every key (including the original `O`) is a normal Geode keybind setting, so you can rebind them in the mod's settings.
 
 ### Display Settings (new "Display" button in the editor)
 * **Precision Size / Counter Size / Marker Size:** sliders (50% - 250%) for the bottom-left L* labels, the top-left counter HUD and the in-game circle markers.
 * **HUD Opacity** slider and a **Show Markers** toggle (keep the counters, hide the circles).
+* **Sound Volume** slider (0% - 100%, on top of the game's SFX volume) and a **Notifications** switch that turns off every toast the mod shows (auto-save, keybind messages).
 * **Window Size** slider (60% - 140%) that scales *all* of the mod's popups. Enlarging is capped so a window can never be pushed off-screen, and at 100% nothing changes.
 * Previews live: HUD changes are visible behind the popup while you drag; other open mod windows resize as you drag.
 
@@ -74,7 +80,8 @@ src/
 ├── Math/                           # L* mathematical models & multi-threaded solver
 │   ├── Calculator.cpp
 │   ├── Calculator.hpp
-│   └── DisplayMath.hpp             # Pure helpers (Base L* %, slider mapping, popup fit) - unit tested, no Geode deps
+│   ├── DisplayMath.hpp             # Pure helpers (Base L* %, slider mapping, popup fit) - unit tested, no Geode deps
+│   └── HudTally.hpp                # Fast preset matching / recounting - verified identical to the naive loops
 ├── UI/                             # Custom Geode popups and editors
 │   ├── AddFramePopup.cpp / .hpp
 │   ├── DisplaySettingsPopup.cpp / .hpp
@@ -104,7 +111,7 @@ All keybinds are desktop-only and can be changed in the mod's settings (Geode ke
 | **`Y`** | Undo Last Keybind Frame | Remove the most recent frame added by `I` / `U` |
 | **Time Icon** | Pause Menu (Right side) | Open Frame Action Editor |
 
-Related settings: **Keybind Frame Offset** (added to the current tick, default 0), **Keybind Notifications** (default on) and **Auto-Recalculate L\* After Keybind** (default off). Keys are ignored while a text box is focused.
+Related settings: **Keybind Frame Offset** (added to the current tick, default 0) and **Auto-Recalculate L\* After Keybind** (default off). Keybind messages follow the **Notifications** switch in Display Settings. Keys are ignored while a text box is focused.
 
 ---
 
@@ -146,8 +153,11 @@ Related settings: **Keybind Frame Offset** (added to the current tick, default 0
    geode build
    ```
 
-### Running the unit tests (no game needed)
-The pure logic behind the Base L* percentage, the sliders and the popup fit lives in `src/Math/DisplayMath.hpp` and is covered by `tests/displaymath_test.cpp`:
+### Running the tests (no game needed)
+The logic that does not depend on Geode/FMOD is header-only and covered by tests:
    ```bash
-   g++ -std=c++20 -Wall -Wextra -o displaymath_test tests/displaymath_test.cpp && ./displaymath_test
+   g++ -std=c++20 -Wall -Wextra -o displaymath_test tests/displaymath_test.cpp && ./displaymath_test      # Base L* %, sliders, popup fit
+   g++ -std=c++20 -O2 -Wall -Wextra -o hudtally_test tests/hudtally_test.cpp && ./hudtally_test            # HUD counting == original loops
+   g++ -std=c++20 -O2 -Wall -Wextra -pthread -o audiomixer_test tests/audiomixer_test.cpp && ./audiomixer_test   # mixer, 12k sounds/s, timing, threads
    ```
+`audiomixer_test` also builds with `-fsanitize=thread` and `-fsanitize=address,undefined`.

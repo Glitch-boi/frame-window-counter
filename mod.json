@@ -6,7 +6,7 @@
     "mac": "2.2081",
     "ios": "2.2081"
   },
-  "version": "v1.3.0",
+  "version": "v1.4.0",
   "id": "c0nscious.frame_window",
   "name": "Frame Window Counter",
   "developer": "C0nscious",
@@ -73,16 +73,6 @@
         "mac"
       ]
     },
-    "keybind-notify": {
-      "type": "bool",
-      "name": "Keybind Notifications",
-      "description": "Show a small pop-up when a keybind adds, skips, or undoes a frame.",
-      "default": true,
-      "platforms": [
-        "win",
-        "mac"
-      ]
-    },
     "keybind-auto-recalc": {
       "type": "bool",
       "name": "Auto-Recalculate L* After Keybind",
@@ -92,6 +82,25 @@
         "win",
         "mac"
       ]
+    },
+    "audio-title": {
+      "type": "title",
+      "name": "Audio"
+    },
+    "audio-buffer-size": {
+      "type": "int",
+      "name": "Audio Buffer Size",
+      "description": "Size (in samples) of the SFX mixer's buffer. Lower = sounds play sooner, higher = safer against crackling on slow machines. 512 is a good balance; try 256 for the lowest delay or 1024 if you hear crackling.",
+      "default": 512,
+      "min": 128,
+      "max": 4096,
+      "requires-restart": true
+    },
+    "use-legacy-audio": {
+      "type": "bool",
+      "name": "Use Legacy Audio Engine",
+      "description": "Turns off the new SFX mixer and plays each sound as its own FMOD channel like before 1.4.0 (max 32 overlapping per sound, so fast macros will cut sounds off). Only enable this if the new mixer misbehaves on your system.",
+      "default": false
     }
   }
 }
